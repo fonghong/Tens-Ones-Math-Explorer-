@@ -51,6 +51,28 @@ export const MathCanvas = forwardRef<MathCanvasRef, MathCanvasProps>((props, ref
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
+  // Keep refs of props to avoid stale closures in the animation loops
+  const propsRef = useRef({
+    value,
+    step,
+    autoGroup,
+    language,
+    chineseDialect,
+    voiceover,
+    soundEffects
+  });
+
+  // Always keep propsRef synchronized on every render
+  propsRef.current = {
+    value,
+    step,
+    autoGroup,
+    language,
+    chineseDialect,
+    voiceover,
+    soundEffects
+  };
+
   // Core physical entities
   const dotsRef = useRef<Dot[]>([]);
   const clustersRef = useRef<Cluster[]>([]);
@@ -96,10 +118,10 @@ export const MathCanvas = forwardRef<MathCanvasRef, MathCanvasProps>((props, ref
     // Create Tens Clusters
     for (let t = 0; t < numTens; t++) {
       const clusterId = `cluster_${Date.now()}_${t}_${Math.random().toString(36).substr(2, 4)}`;
-      const col = t % 2;
-      const row = Math.floor(t / 2);
-      const targetX = 75 + col * 125;
-      const targetY = 75 + row * 115;
+      const col = t % 3;
+      const row = Math.floor(t / 3);
+      const targetX = 65 + col * 115;
+      const targetY = 110 + row * 115;
 
       const newCluster: Cluster = {
         id: clusterId,
@@ -217,14 +239,14 @@ export const MathCanvas = forwardRef<MathCanvasRef, MathCanvasProps>((props, ref
 
   // Voiceover reader
   const speak = (num: number) => {
-    if (!voiceover || lastSpokenValueRef.current === num) return;
+    if (!propsRef.current.voiceover || lastSpokenValueRef.current === num) return;
     lastSpokenValueRef.current = num;
 
     if (!('speechSynthesis' in window)) return;
     window.speechSynthesis.cancel();
 
     let text = '';
-    if (language === 'ZH') {
+    if (propsRef.current.language === 'ZH') {
       if (num === 0) text = '零';
       else {
         const tens = Math.floor(num / 10);
@@ -243,8 +265,8 @@ export const MathCanvas = forwardRef<MathCanvasRef, MathCanvasProps>((props, ref
     }
 
     const utterance = new SpeechSynthesisUtterance(text);
-    if (language === 'ZH') {
-      if (chineseDialect === 'cantonese') {
+    if (propsRef.current.language === 'ZH') {
+      if (propsRef.current.chineseDialect === 'cantonese') {
         utterance.lang = 'zh-HK';
         if ('speechSynthesis' in window) {
           const voices = window.speechSynthesis.getVoices();
@@ -295,20 +317,20 @@ export const MathCanvas = forwardRef<MathCanvasRef, MathCanvasProps>((props, ref
   // Trigger carry-over clustering animation
   const triggerGroupAnimation = (dotsToGroup: Dot[]) => {
     isAnimatingQueueRef.current = true;
-    synth.setEnabled(soundEffects);
+    synth.setEnabled(propsRef.current.soundEffects);
     synth.playDing();
 
     // Create a new cluster ID
     const clusterId = `cluster_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
 
-    // Determine target slot in the Tens Zone (arranged in 2 columns)
+    // Determine target slot in the Tens Zone (arranged in 3 columns)
     const clusterIndex = clustersRef.current.length;
-    const col = clusterIndex % 2;
-    const row = Math.floor(clusterIndex / 2);
+    const col = clusterIndex % 3;
+    const row = Math.floor(clusterIndex / 3);
     
     // Smooth grid positions
-    const targetX = 75 + col * 125;
-    const targetY = 75 + row * 115;
+    const targetX = 65 + col * 115;
+    const targetY = 110 + row * 115;
 
     // Start cluster at the average position of the grouping dots to make it organic
     let avgX = 0;
@@ -399,7 +421,7 @@ export const MathCanvas = forwardRef<MathCanvasRef, MathCanvasProps>((props, ref
   // Trigger borrowing break ring animation
   const triggerBreakAnimation = (clusterToBreak: Cluster) => {
     isAnimatingQueueRef.current = true;
-    synth.setEnabled(soundEffects);
+    synth.setEnabled(propsRef.current.soundEffects);
     synth.playBreak();
 
     clusterToBreak.isBreaking = true;
@@ -450,7 +472,7 @@ export const MathCanvas = forwardRef<MathCanvasRef, MathCanvasProps>((props, ref
           requestAnimationFrame(animateSubtracted);
         } else {
           // It reached the far left, so pop it!
-          synth.setEnabled(soundEffects);
+          synth.setEnabled(propsRef.current.soundEffects);
           synth.playPop();
 
           // Spawn popped sparkles
@@ -529,7 +551,7 @@ export const MathCanvas = forwardRef<MathCanvasRef, MathCanvasProps>((props, ref
 
   // Check if there are loose dots to auto-group
   const checkAutoGroup = () => {
-    if (!autoGroup) return;
+    if (!propsRef.current.autoGroup) return;
     if (draggedDotIdRef.current !== null) return;
 
     // Loose ones are dots that are 'loose'
@@ -580,32 +602,32 @@ export const MathCanvas = forwardRef<MathCanvasRef, MathCanvasProps>((props, ref
       ctx.setLineDash([]); // Reset dash
 
       // Draw exchange hints in Traditional Chinese or English
-      ctx.fillStyle = 'rgba(120, 144, 156, 0.6)';
-      ctx.font = 'bold 12px "Inter", sans-serif';
+      ctx.fillStyle = 'rgba(120, 144, 156, 0.7)';
+      ctx.font = 'bold 15px "Inter", sans-serif';
       ctx.textAlign = 'center';
-      if (language === 'ZH') {
-        ctx.fillText('← 合 (十個一組)', TENS_DIVIDER_X - 60, 25);
-        ctx.fillText('(拆開圓圈) 拆 →', TENS_DIVIDER_X + 60, 25);
+      if (propsRef.current.language === 'ZH') {
+        ctx.fillText('← 合 (十個一組)', TENS_DIVIDER_X - 75, 30);
+        ctx.fillText('(拆開圓圈) 拆 →', TENS_DIVIDER_X + 75, 30);
       } else {
-        ctx.fillText('← Merge (Group of 10)', TENS_DIVIDER_X - 80, 25);
-        ctx.fillText('(Tap to Break) Split →', TENS_DIVIDER_X + 80, 25);
+        ctx.fillText('← Merge (Group of 10)', TENS_DIVIDER_X - 100, 30);
+        ctx.fillText('(Tap to Break) Split →', TENS_DIVIDER_X + 100, 30);
       }
 
       // Draw Zone Labels & Subtle Icons
-      ctx.font = 'bold 16px "Inter", sans-serif';
+      ctx.font = 'bold 22px "Inter", sans-serif';
       
       // Tens Label (Blue)
       ctx.fillStyle = '#0288d1';
       ctx.textAlign = 'left';
-      ctx.fillText(language === 'ZH' ? '⊞ 十位區 (組群)' : '⊞ Tens Zone (Groups)', 20, 35);
+      ctx.fillText(propsRef.current.language === 'ZH' ? '⊞ 十位區 (組群)' : '⊞ Tens Zone (Groups)', 20, 42);
 
       // Ones Label (Orange)
       ctx.fillStyle = '#e64a19';
       ctx.textAlign = 'right';
-      ctx.fillText(language === 'ZH' ? '● 個位區 (散件)' : '● Ones Zone (Loose Dots)', LOGICAL_WIDTH - 20, 35);
+      ctx.fillText(propsRef.current.language === 'ZH' ? '● 個位區 (散件)' : '● Ones Zone (Loose Dots)', LOGICAL_WIDTH - 20, 42);
 
       // Handle Manual Grouping Basket Mode if auto-group is off
-      if (!autoGroup) {
+      if (!propsRef.current.autoGroup) {
         // Draw the Magic Grouping Basket in Ones Zone
         ctx.strokeStyle = '#ffb74d';
         ctx.lineWidth = 3;
@@ -631,20 +653,20 @@ export const MathCanvas = forwardRef<MathCanvasRef, MathCanvasProps>((props, ref
         const dotsInBasket = dotsRef.current.filter(d => d.state === 'loose' && isInsideBasket(d.x, d.y));
         
         ctx.fillStyle = '#ff8f00';
-        ctx.font = 'bold 14px "Inter", sans-serif';
+        ctx.font = 'bold 18px "Inter", sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText(
-          language === 'ZH' ? `合十籃 (${dotsInBasket.length}/10)` : `Basket (${dotsInBasket.length}/10)`,
+          propsRef.current.language === 'ZH' ? `合十籃 (${dotsInBasket.length}/10)` : `Basket (${dotsInBasket.length}/10)`,
           basketCenter.x,
-          basketCenter.y - 12
+          basketCenter.y - 14
         );
 
-        ctx.font = '10px "Inter", sans-serif';
+        ctx.font = 'bold 13px "Inter", sans-serif';
         ctx.fillStyle = '#ffb300';
         ctx.fillText(
-          language === 'ZH' ? '放10個球自動變圓圈' : 'Drop 10 here to group!',
+          propsRef.current.language === 'ZH' ? '放10個球自動變圓圈' : 'Drop 10 here to group!',
           basketCenter.x,
-          basketCenter.y + 14
+          basketCenter.y + 18
         );
 
         // If 10 dots are in the basket, trigger grouping!
@@ -691,7 +713,7 @@ export const MathCanvas = forwardRef<MathCanvasRef, MathCanvasProps>((props, ref
 
             // Increment logic
             visualValueRef.current += 1;
-            synth.setEnabled(soundEffects);
+            synth.setEnabled(propsRef.current.soundEffects);
             synth.playTick();
 
             // Spawn 1 loose dot in Ones Zone with a cute bounce-in from far right
@@ -732,7 +754,7 @@ export const MathCanvas = forwardRef<MathCanvasRef, MathCanvasProps>((props, ref
             if (looseOnes.length > 0) {
               // We have loose dots! Pop 1.
               visualValueRef.current -= 1;
-              synth.setEnabled(soundEffects);
+              synth.setEnabled(propsRef.current.soundEffects);
               synth.playPop();
 
               const dotToPop = looseOnes[looseOnes.length - 1];
@@ -795,7 +817,7 @@ export const MathCanvas = forwardRef<MathCanvasRef, MathCanvasProps>((props, ref
 
         // Draw center numeric badge "10"
         ctx.fillStyle = '#0288d1';
-        ctx.font = `bold ${Math.round(14 * cluster.scale)}px "Inter", sans-serif`;
+        ctx.font = `bold ${Math.round(20 * cluster.scale)}px "Inter", sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('10', cluster.x, cluster.y);
@@ -1000,7 +1022,7 @@ export const MathCanvas = forwardRef<MathCanvasRef, MathCanvasProps>((props, ref
       });
 
       // Auto-group if enabled, not currently animating an action, and no dot is being dragged
-      if (autoGroup && !isAnimatingQueueRef.current && draggedDotIdRef.current === null) {
+      if (propsRef.current.autoGroup && !isAnimatingQueueRef.current && draggedDotIdRef.current === null) {
         checkAutoGroup();
       }
 
@@ -1024,7 +1046,7 @@ export const MathCanvas = forwardRef<MathCanvasRef, MathCanvasProps>((props, ref
     return () => {
       cancelAnimationFrame(animationId);
     };
-  }, [language, autoGroup, voiceover, soundEffects]);
+  }, []);
 
 
   // Touch / Mouse Event Handlers (Support both tap-breaks, dragging, and lasso grouping)
