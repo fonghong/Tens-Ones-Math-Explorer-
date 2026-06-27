@@ -385,14 +385,10 @@ export const MathCanvas = forwardRef<MathCanvasRef, MathCanvasProps>((props, ref
     const animateFly = () => {
       progress += 0.04; // Fly speed
       if (progress < 1) {
-        newCluster.x = avgX + (targetX - avgX) * progress;
-        newCluster.y = avgY + (targetY - avgY) * progress;
         newCluster.scale = 0.1 + 0.9 * progress;
         newCluster.glowProgress = 1.0 - progress;
         requestAnimationFrame(animateFly);
       } else {
-        newCluster.x = targetX;
-        newCluster.y = targetY;
         newCluster.scale = 1.0;
         newCluster.glowProgress = 0;
         isAnimatingQueueRef.current = false; // Release lock
@@ -402,8 +398,8 @@ export const MathCanvas = forwardRef<MathCanvasRef, MathCanvasProps>((props, ref
           const angle = Math.random() * Math.PI * 2;
           const speed = 1 + Math.random() * 2;
           sparklesRef.current.push({
-            x: targetX,
-            y: targetY,
+            x: newCluster.x,
+            y: newCluster.y,
             vx: Math.cos(angle) * speed,
             vy: Math.sin(angle) * speed,
             color: '#4fc3f7', // ice blue
@@ -795,7 +791,19 @@ export const MathCanvas = forwardRef<MathCanvasRef, MathCanvasProps>((props, ref
       }
 
       // Update and Draw Tens Clusters
-      clustersRef.current.forEach((cluster) => {
+      clustersRef.current.forEach((cluster, index) => {
+        // Smoothly update target positions of each cluster dynamically based on its index
+        if (!cluster.isBreaking) {
+          const col = index % 3;
+          const row = Math.floor(index / 3);
+          cluster.targetX = 65 + col * 115;
+          cluster.targetY = 110 + row * 115;
+
+          // Slide x and y smoothly towards target positions
+          cluster.x += (cluster.targetX - cluster.x) * 0.15;
+          cluster.y += (cluster.targetY - cluster.y) * 0.15;
+        }
+
         // Draw blue container ring
         ctx.strokeStyle = 'rgba(79, 195, 247, 0.7)';
         ctx.lineWidth = 4;
