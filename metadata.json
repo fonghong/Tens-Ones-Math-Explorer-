@@ -1,0 +1,6 @@
+{
+  "name": "Tens and Ones Explorer",
+  "description": "An interactive, gamified math learning tool designed for 4-year-olds to explore Tens (十位) and Ones (個位) through playful dot merging and splitting animations.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
