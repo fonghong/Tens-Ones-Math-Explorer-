@@ -48,6 +48,62 @@ export default function App() {
   // Canvas Ref to trigger resets / manual groupings
   const canvasRef = useRef<MathCanvasRef | null>(null);
 
+  // Pre-load speech synthesis voices and unlock audio on first user touch/gesture
+  React.useEffect(() => {
+    const unlockSpeech = () => {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        const synthObj = window.speechSynthesis;
+        
+        // Create an empty silent utterance to unlock iOS/Android TTS engine
+        try {
+          const utterance = new SpeechSynthesisUtterance('');
+          utterance.volume = 0;
+          utterance.rate = 1;
+          synthObj.speak(utterance);
+        } catch (e) {
+          console.warn('SpeechSynthesis warmup failed:', e);
+        }
+
+        // Force browser to load / populate voices list
+        if (typeof synthObj.getVoices === 'function') {
+          synthObj.getVoices();
+        }
+      }
+      
+      // Remove event listeners after first user gesture
+      window.removeEventListener('click', unlockSpeech, true);
+      window.removeEventListener('touchstart', unlockSpeech, true);
+    };
+
+    window.addEventListener('click', unlockSpeech, true);
+    window.addEventListener('touchstart', unlockSpeech, true);
+
+    // Warm up voices load on mount
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      if (typeof window.speechSynthesis.getVoices === 'function') {
+        window.speechSynthesis.getVoices();
+      }
+      
+      const handleVoicesChanged = () => {
+        if (typeof window.speechSynthesis.getVoices === 'function') {
+          window.speechSynthesis.getVoices();
+        }
+      };
+      
+      window.speechSynthesis.addEventListener('voiceschanged', handleVoicesChanged);
+      return () => {
+        window.removeEventListener('click', unlockSpeech, true);
+        window.removeEventListener('touchstart', unlockSpeech, true);
+        window.speechSynthesis.removeEventListener('voiceschanged', handleVoicesChanged);
+      };
+    }
+
+    return () => {
+      window.removeEventListener('click', unlockSpeech, true);
+      window.removeEventListener('touchstart', unlockSpeech, true);
+    };
+  }, []);
+
   // Handle Increments clamped to 99
   const handleIncrement = () => {
     synth.setEnabled(soundEffects);
