@@ -552,13 +552,13 @@ export default function App() {
                 <div className="bg-slate-50/50 rounded-2xl p-4 border border-slate-100 flex flex-col justify-between gap-3">
                   <div className="select-none">
                     <h4 className="font-bold text-slate-700 text-sm flex items-center gap-1">
-                      <span>🧺</span>
+                      <span>🧮</span>
                       {language === 'ZH' ? '分組模式 (Grouping Mode)' : 'Grouping Mode'}
                     </h4>
                     <p className="text-slate-400 text-xs mt-1 leading-relaxed">
                       {language === 'ZH'
-                        ? '【籃子模式】提供一個大容量合十籃。可以動手拖曳球球進去，放滿 10 個時，球球會停止互斥並留在原地，湊齊 10 個瞬間合體！'
-                        : '"Basket Mode" displays a magical basket. Drag loose dots into the basket where they stay still without repelling.'}
+                        ? '【十數格模式】提供一個 5×2 的十數格。動手拖曳球球進去時會自動磁吸對齊，放滿 10 個時，瞬間自動合十！'
+                        : '"Ten Frame Mode" displays a 5×2 grid. Drag loose dots into the frame where they snap to cell centers. Fill all 10 to group!'}
                     </p>
                   </div>
 
@@ -589,7 +589,7 @@ export default function App() {
                           : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
                       }`}
                     >
-                      {language === 'ZH' ? '籃子模式' : 'Basket Mode'}
+                      {language === 'ZH' ? '十數格模式' : 'Ten Frame'}
                     </button>
                   </div>
                 </div>

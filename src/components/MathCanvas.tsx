@@ -109,8 +109,39 @@ export const MathCanvas = forwardRef<MathCanvasRef, MathCanvasProps>((props, ref
   const LOGICAL_HEIGHT = 420;
   const TENS_DIVIDER_X = LOGICAL_WIDTH * 0.46;
 
-  // Basket configurations
-  const basketCenter = { x: LOGICAL_WIDTH * 0.73, y: LOGICAL_HEIGHT * 0.58 };
+  // School Ten Frame Configuration
+  const TEN_FRAME_COLS = 5;
+  const TEN_FRAME_ROWS = 2;
+  const CELL_SIZE = 48; // size of each cell
+  const CELL_GAP = 8;  // gap between cells
+  const frameCenter = { x: 584, y: 250 };
+
+  const getTenFrameCells = () => {
+    const cells = [];
+    const frameWidth = TEN_FRAME_COLS * CELL_SIZE + (TEN_FRAME_COLS - 1) * CELL_GAP; // 272
+    const frameHeight = TEN_FRAME_ROWS * CELL_SIZE + (TEN_FRAME_ROWS - 1) * CELL_GAP; // 104
+    const startX = frameCenter.x - frameWidth / 2; // 448
+    const startY = frameCenter.y - frameHeight / 2; // 198
+    for (let r = 0; r < TEN_FRAME_ROWS; r++) {
+      for (let c = 0; c < TEN_FRAME_COLS; c++) {
+        const left = startX + c * (CELL_SIZE + CELL_GAP);
+        const top = startY + r * (CELL_SIZE + CELL_GAP);
+        cells.push({
+          index: r * TEN_FRAME_COLS + c,
+          row: r,
+          col: c,
+          left,
+          top,
+          x: left + CELL_SIZE / 2,
+          y: top + CELL_SIZE / 2
+        });
+      }
+    }
+    return cells;
+  };
+
+  // Basket configurations (preserved for coordinate checks / backward compatibility)
+  const basketCenter = { x: 584, y: 250 };
   const basketRadius = 85; // Enlarged from 65 to give kids more space and prevent crowding
 
   // Track if speech synthesis is currently active
@@ -250,6 +281,48 @@ export const MathCanvas = forwardRef<MathCanvasRef, MathCanvasProps>((props, ref
       }
     }
   }, [value]);
+
+  // Push loose dots out of the Ten Frame when switching to manual mode
+  useEffect(() => {
+    if (!autoGroup) {
+      const frameLeft = 448;
+      const frameRight = 720;
+      const frameTop = 198;
+      const frameBottom = 302;
+      const margin = 20;
+
+      dotsRef.current.forEach(dot => {
+        if (dot.state === 'loose') {
+          // Reset its snapping first
+          dot.snappedCellIndex = null;
+
+          // If the dot is within or too close to the Ten Frame area, push it out
+          const inFrameX = dot.x >= frameLeft - margin && dot.x <= frameRight + margin;
+          const inFrameY = dot.y >= frameTop - margin && dot.y <= frameBottom + margin;
+          if (inFrameX && inFrameY) {
+            // Find a safe spot in the Ones Zone but outside the frame!
+            const options = [
+              { minX: TENS_DIVIDER_X + 25, maxX: 430, minY: 75, maxY: 400 },
+              { minX: 430, maxX: 750, minY: 75, maxY: 175 },
+              { minX: 430, maxX: 750, minY: 315, maxY: 400 },
+            ];
+            const opt = options[Math.floor(Math.random() * options.length)];
+            dot.x = opt.minX + Math.random() * (opt.maxX - opt.minX);
+            dot.y = opt.minY + Math.random() * (opt.maxY - opt.minY);
+            dot.vx = (Math.random() - 0.5) * 2;
+            dot.vy = (Math.random() - 0.5) * 2;
+          }
+        }
+      });
+    } else {
+      // Clear any snaps if switched back to autoGroup
+      dotsRef.current.forEach(dot => {
+        if (dot.state === 'loose') {
+          dot.snappedCellIndex = null;
+        }
+      });
+    }
+  }, [autoGroup]);
 
   // Voiceover reader
   const speak = (num: number) => {
@@ -617,7 +690,7 @@ export const MathCanvas = forwardRef<MathCanvasRef, MathCanvasProps>((props, ref
     const updateAndRender = () => {
       // Safeguard: If physical representations are empty but prop value is > 0, instantly synchronize them.
       // This prevents any mounting timing race conditions where the canvas starts blank.
-      if (dotsRef.current.length === 0 && clustersRef.current.length === 0 && value > 0) {
+      if (dotsRef.current.length === 0 && clustersRef.current.length === 0 && value > 0 && targetValueRef.current > 0) {
         instantlySyncValue(value);
       }
 
@@ -669,52 +742,130 @@ export const MathCanvas = forwardRef<MathCanvasRef, MathCanvasProps>((props, ref
       ctx.textAlign = 'right';
       ctx.fillText(propsRef.current.language === 'ZH' ? '● 個位區 (散件)' : '● Ones Zone (Loose Dots)', LOGICAL_WIDTH - 20, 42);
 
-      // Handle Manual Grouping Basket Mode if auto-group is off
+      // Handle Manual Grouping School Ten Frame Mode if auto-group is off
       if (!propsRef.current.autoGroup) {
-        // Draw the Magic Grouping Basket in Ones Zone
-        ctx.strokeStyle = '#ffb74d';
-        ctx.lineWidth = 3;
-        ctx.setLineDash([6, 4]);
+        const cells = getTenFrameCells();
+        const dotsInFrame = dotsRef.current.filter(d => d.state === 'loose' && d.snappedCellIndex !== null && d.snappedCellIndex !== undefined);
+
+        const frameWidth = 272;
+        const frameHeight = 104;
+        const startX = frameCenter.x - frameWidth / 2; // 448
+        const startY = frameCenter.y - frameHeight / 2; // 198
+        const padding = 10;
         
-        // Glow effect
-        ctx.shadowColor = 'rgba(255, 183, 77, 0.3)';
+        // Glow effect for active or near-complete frames
+        ctx.shadowColor = dotsInFrame.length >= 8 ? 'rgba(76, 175, 80, 0.2)' : 'rgba(255, 183, 77, 0.15)';
         ctx.shadowBlur = 10;
-        
-        ctx.beginPath();
-        ctx.arc(basketCenter.x, basketCenter.y, basketRadius, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.setLineDash([]); // Reset
-        ctx.shadowBlur = 0; // Reset shadow
 
-        // Soft filled backing for the basket
-        ctx.fillStyle = 'rgba(255, 183, 77, 0.08)';
+        // Draw main outer background frame
+        ctx.fillStyle = 'rgba(255, 183, 77, 0.05)';
+        ctx.strokeStyle = dotsInFrame.length >= 10 ? '#4caf50' : '#ffa726';
+        ctx.lineWidth = 4;
+        ctx.lineJoin = 'round';
+        
+        // Draw a rounded rect for the outer container
+        const r = 16; // corner radius
         ctx.beginPath();
-        ctx.arc(basketCenter.x, basketCenter.y, basketRadius, 0, Math.PI * 2);
+        if (ctx.roundRect) {
+          ctx.roundRect(startX - padding, startY - padding, frameWidth + padding * 2, frameHeight + padding * 2, r);
+        } else {
+          ctx.rect(startX - padding, startY - padding, frameWidth + padding * 2, frameHeight + padding * 2);
+        }
         ctx.fill();
+        ctx.stroke();
+        ctx.shadowBlur = 0; // reset
 
-        // Count dots in basket
-        const dotsInBasket = dotsRef.current.filter(d => d.state === 'loose' && isInsideBasket(d.x, d.y));
-        
-        ctx.fillStyle = '#ff8f00';
+        // Detect hover cell index if a dot is being dragged
+        let hoverCellIndex: number | null = null;
+        if (draggedDotIdRef.current) {
+          const draggedDot = dotsRef.current.find(d => d.id === draggedDotIdRef.current);
+          if (draggedDot) {
+            const frameLeft = startX;
+            const frameRight = startX + frameWidth;
+            const frameTop = startY;
+            const frameBottom = startY + frameHeight;
+            const margin = 35;
+            const isInsideFrameArea = draggedDot.x >= frameLeft - margin && 
+                                      draggedDot.x <= frameRight + margin && 
+                                      draggedDot.y >= frameTop - margin && 
+                                      draggedDot.y <= frameBottom + margin;
+            if (isInsideFrameArea) {
+              let minDistance = Infinity;
+              cells.forEach(cell => {
+                const isOccupied = dotsRef.current.some(d => d.id !== draggedDot.id && d.state === 'loose' && d.snappedCellIndex === cell.index);
+                if (!isOccupied) {
+                  const dx = draggedDot.x - cell.x;
+                  const dy = draggedDot.y - cell.y;
+                  const dist = Math.sqrt(dx * dx + dy * dy);
+                  if (dist < minDistance) {
+                    minDistance = dist;
+                    hoverCellIndex = cell.index;
+                  }
+                }
+              });
+            }
+          }
+        }
+
+        // Draw individual cells
+        cells.forEach(cell => {
+          const isOccupied = dotsRef.current.some(d => d.state === 'loose' && d.snappedCellIndex === cell.index);
+          const isHovered = hoverCellIndex === cell.index;
+          
+          if (isHovered) {
+            ctx.fillStyle = 'rgba(76, 175, 80, 0.15)'; // friendly green target highlight
+            ctx.strokeStyle = '#4caf50';
+            ctx.lineWidth = 3;
+          } else {
+            ctx.fillStyle = isOccupied ? 'rgba(255, 183, 77, 0.15)' : 'rgba(255, 255, 255, 0.85)';
+            ctx.strokeStyle = isOccupied ? '#ff7043' : '#ffe082';
+            ctx.lineWidth = 2;
+          }
+          
+          ctx.beginPath();
+          if (ctx.roundRect) {
+            ctx.roundRect(cell.left, cell.top, CELL_SIZE, CELL_SIZE, 8);
+          } else {
+            ctx.rect(cell.left, cell.top, CELL_SIZE, CELL_SIZE);
+          }
+          ctx.fill();
+          ctx.stroke();
+
+          // Draw tiny guideline inside empty cells
+          if (!isOccupied && !isHovered) {
+            ctx.fillStyle = 'rgba(255, 183, 77, 0.25)';
+            ctx.beginPath();
+            ctx.arc(cell.x, cell.y, 4, 0, Math.PI * 2);
+            ctx.fill();
+          } else if (isHovered) {
+            ctx.fillStyle = 'rgba(76, 175, 80, 0.4)';
+            ctx.beginPath();
+            ctx.arc(cell.x, cell.y, 6, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        });
+
+        // Draw Frame Title and Instructions
+        ctx.fillStyle = '#ff7043';
         ctx.font = 'bold 18px "Inter", sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText(
-          propsRef.current.language === 'ZH' ? `合十籃 (${dotsInBasket.length}/10)` : `Basket (${dotsInBasket.length}/10)`,
-          basketCenter.x,
-          basketCenter.y - 14
+          propsRef.current.language === 'ZH' ? `十數格 (${dotsInFrame.length}/10)` : `Ten Frame (${dotsInFrame.length}/10)`,
+          frameCenter.x,
+          startY - 25
         );
 
         ctx.font = 'bold 13px "Inter", sans-serif';
         ctx.fillStyle = '#ffb300';
         ctx.fillText(
-          propsRef.current.language === 'ZH' ? '放10個球自動變圓圈' : 'Drop 10 here to group!',
-          basketCenter.x,
-          basketCenter.y + 18
+          propsRef.current.language === 'ZH' ? '放滿 10 個格自動組合成十' : 'Fill all 10 cells to group!',
+          frameCenter.x,
+          startY + frameHeight + 24
         );
 
-        // If 10 dots are in the basket, trigger grouping!
-        if (dotsInBasket.length >= 10) {
-          triggerGroupAnimation(dotsInBasket.slice(0, 10));
+        // If 10 dots are snapped in the Ten Frame cells, group them!
+        if (dotsInFrame.length >= 10) {
+          triggerGroupAnimation(dotsInFrame.slice(0, 10));
         }
       }
 
@@ -900,6 +1051,10 @@ export const MathCanvas = forwardRef<MathCanvasRef, MathCanvasProps>((props, ref
           // Skip if being dragged
           if (d1.id === draggedDotIdRef.current || d2.id === draggedDotIdRef.current) continue;
 
+          // Skip repulsion if either dot is snapped in a Ten Frame cell
+          if (d1.snappedCellIndex !== null && d1.snappedCellIndex !== undefined) continue;
+          if (d2.snappedCellIndex !== null && d2.snappedCellIndex !== undefined) continue;
+
           // Skip repulsion if either dot is resting inside the basket in Basket Mode to let them stay there
           if (!autoGroup && (isInsideBasket(d1.x, d1.y) || isInsideBasket(d2.x, d2.y))) continue;
 
@@ -942,11 +1097,23 @@ export const MathCanvas = forwardRef<MathCanvasRef, MathCanvasProps>((props, ref
           // If loose dot
           if (dot.id === draggedDotIdRef.current) {
             // Velocity computed during dragging, handled in mousemove
+          } else if (dot.snappedCellIndex !== null && dot.snappedCellIndex !== undefined) {
+            const cells = getTenFrameCells();
+            const cell = cells.find(c => c.index === dot.snappedCellIndex);
+            if (cell) {
+              dot.targetX = cell.x;
+              dot.targetY = cell.y;
+              // Smoothly glide to the cell's center
+              dot.x += (dot.targetX - dot.x) * 0.25;
+              dot.y += (dot.targetY - dot.y) * 0.25;
+              dot.vx = 0;
+              dot.vy = 0;
+            }
           } else {
             // Apply air resistance/friction
             dot.vx *= 0.92;
             dot.vy *= 0.92;
-
+ 
             const inBasket = !autoGroup && isInsideBasket(dot.x, dot.y);
             if (inBasket) {
               // Settle quickly to rest inside the basket and ignore breezes
@@ -956,14 +1123,14 @@ export const MathCanvas = forwardRef<MathCanvasRef, MathCanvasProps>((props, ref
               // Apply slight random walk breeze to make them float nicely
               dot.vx += (Math.random() - 0.5) * 0.14;
               dot.vy += (Math.random() - 0.5) * 0.14;
-
+ 
               // If the dot is old (not new), we gently guide its drift towards the left part of the Ones Zone!
               if (!dot.isNew && dot.state === 'loose') {
                 const targetDriftX = TENS_DIVIDER_X + 90 + (dot.size * 1.5);
                 dot.vx += (targetDriftX - dot.x) * 0.005;
               }
             }
-
+ 
             // Speed limit
             const speed = Math.sqrt(dot.vx * dot.vx + dot.vy * dot.vy);
             const maxSpeed = 1.6;
@@ -971,17 +1138,17 @@ export const MathCanvas = forwardRef<MathCanvasRef, MathCanvasProps>((props, ref
               dot.vx = (dot.vx / speed) * maxSpeed;
               dot.vy = (dot.vy / speed) * maxSpeed;
             }
-
+ 
             dot.x += dot.vx;
             dot.y += dot.vy;
-
+ 
             // Soft boundaries on Ones Zone
             const margin = dot.size + 6;
             const minX = TENS_DIVIDER_X + margin;
             const maxX = LOGICAL_WIDTH - margin;
             const minY = 65 + margin;
             const maxY = LOGICAL_HEIGHT - margin;
-
+ 
             if (dot.x < minX) {
               dot.x = minX;
               dot.vx = -dot.vx * 0.5;
@@ -1145,6 +1312,8 @@ export const MathCanvas = forwardRef<MathCanvasRef, MathCanvasProps>((props, ref
 
     if (clickedDot) {
       draggedDotIdRef.current = clickedDot.id;
+      // Clear snapping immediately when dragged!
+      clickedDot.snappedCellIndex = null;
       dragOffsetRef.current = {
         x: clickedDot.x - x,
         y: clickedDot.y - y,
@@ -1221,6 +1390,60 @@ export const MathCanvas = forwardRef<MathCanvasRef, MathCanvasProps>((props, ref
   };
 
   const handleEnd = () => {
+    if (draggedDotIdRef.current) {
+      const draggedDot = dotsRef.current.find(d => d.id === draggedDotIdRef.current);
+      if (draggedDot) {
+        if (!propsRef.current.autoGroup) {
+          // Check if we released inside or very close to the Ten Frame area
+          const frameWidth = 272;
+          const frameHeight = 104;
+          const startX = frameCenter.x - frameWidth / 2; // 448
+          const startY = frameCenter.y - frameHeight / 2; // 198
+          const margin = 35;
+
+          const isInsideFrameArea = draggedDot.x >= startX - margin && 
+                                    draggedDot.x <= startX + frameWidth + margin && 
+                                    draggedDot.y >= startY - margin && 
+                                    draggedDot.y <= startY + frameHeight + margin;
+          
+          if (isInsideFrameArea) {
+            const cells = getTenFrameCells();
+            // Find the closest available empty cell
+            let closestCell = null;
+            let minDistance = Infinity;
+            
+            cells.forEach(cell => {
+              // Check occupancy by OTHER dots
+              const isOccupied = dotsRef.current.some(d => d.id !== draggedDot.id && d.state === 'loose' && d.snappedCellIndex === cell.index);
+              if (!isOccupied) {
+                const dx = draggedDot.x - cell.x;
+                const dy = draggedDot.y - cell.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < minDistance) {
+                  minDistance = dist;
+                  closestCell = cell;
+                }
+              }
+            });
+            
+            if (closestCell !== null) {
+              draggedDot.snappedCellIndex = (closestCell as any).index;
+              draggedDot.vx = 0;
+              draggedDot.vy = 0;
+              // Play a snapping tick or pop sound
+              synth.setEnabled(propsRef.current.soundEffects);
+              synth.playTick();
+            } else {
+              // No empty cells available! Push it back or clear snap
+              draggedDot.snappedCellIndex = null;
+            }
+          } else {
+            // Dragged outside the frame area, so clear snapping
+            draggedDot.snappedCellIndex = null;
+          }
+        }
+      }
+    }
     draggedDotIdRef.current = null;
     isLassoActiveRef.current = false;
     lassoPointsRef.current = [];

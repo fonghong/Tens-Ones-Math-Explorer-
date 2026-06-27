@@ -26,6 +26,7 @@ export interface Dot {
   explosionTime: number; // for particle decay
   spawnTime?: number;    // Timestamp when the dot was created
   isNew?: boolean;       // Flag if this dot is recently added
+  snappedCellIndex?: number | null; // For school ten frame snapping
 }
 
 export interface Cluster {
