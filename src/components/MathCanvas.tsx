@@ -7,6 +7,20 @@ import React, { useRef, useEffect, useState, useImperativeHandle, forwardRef } f
 import { Dot, Cluster, Language, ChineseDialect, IncrementStep } from '../types';
 import { synth } from '../utils/audio';
 
+// Global Speech Synthesis Voice cache to prevent async lag on mobile browsers
+let globalVoicesCache: SpeechSynthesisVoice[] = [];
+if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+  const loadVoices = () => {
+    try {
+      globalVoicesCache = window.speechSynthesis.getVoices();
+    } catch (e) {
+      console.warn('Failed to load speechSynthesis voices:', e);
+    }
+  };
+  loadVoices();
+  window.speechSynthesis.addEventListener('voiceschanged', loadVoices);
+}
+
 interface MathCanvasProps {
   value: number;
   step: IncrementStep;
@@ -269,10 +283,24 @@ export const MathCanvas = forwardRef<MathCanvasRef, MathCanvasProps>((props, ref
       if (propsRef.current.chineseDialect === 'cantonese') {
         utterance.lang = 'zh-HK';
         if ('speechSynthesis' in window) {
-          const voices = window.speechSynthesis.getVoices();
+          // Use global cached voices or direct getVoices() fallback
+          const voices = globalVoicesCache.length > 0 ? globalVoicesCache : window.speechSynthesis.getVoices();
           const hkVoice = voices.find(v => {
             const l = v.lang.toLowerCase().replace('_', '-');
-            return l === 'zh-hk' || l === 'zh-yue' || v.name.toLowerCase().includes('cantonese') || v.name.toLowerCase().includes('hong kong') || v.name.toLowerCase().includes('廣東話') || v.name.toLowerCase().includes('粤语');
+            const n = v.name.toLowerCase();
+            return (
+              l === 'zh-hk' || 
+              l === 'zh-yue' || 
+              l.startsWith('yue') || 
+              n.includes('cantonese') || 
+              n.includes('hong kong') || 
+              n.includes('廣東話') || 
+              n.includes('粵語') || 
+              n.includes('粤语') || 
+              n.includes('sin-ji') || 
+              n.includes('sin ji') ||
+              (n.includes('siri') && l.includes('hk'))
+            );
           });
           if (hkVoice) {
             utterance.voice = hkVoice;
@@ -281,10 +309,29 @@ export const MathCanvas = forwardRef<MathCanvasRef, MathCanvasProps>((props, ref
       } else {
         utterance.lang = 'zh-TW';
         if ('speechSynthesis' in window) {
-          const voices = window.speechSynthesis.getVoices();
+          // Use global cached voices or direct getVoices() fallback
+          const voices = globalVoicesCache.length > 0 ? globalVoicesCache : window.speechSynthesis.getVoices();
           const twVoice = voices.find(v => {
             const l = v.lang.toLowerCase().replace('_', '-');
-            return l === 'zh-tw' || l === 'zh-cn' || v.name.toLowerCase().includes('mandarin') || v.name.toLowerCase().includes('taiwan') || v.name.toLowerCase().includes('普通話') || v.name.toLowerCase().includes('国语');
+            const n = v.name.toLowerCase();
+            return (
+              l === 'zh-tw' || 
+              l === 'zh-cn' || 
+              l === 'zh-sg' || 
+              l.startsWith('zh-') ||
+              n.includes('mandarin') || 
+              n.includes('taiwan') || 
+              n.includes('mainland') || 
+              n.includes('putonghua') || 
+              n.includes('普通話') || 
+              n.includes('普通话') || 
+              n.includes('國語') || 
+              n.includes('国语') || 
+              n.includes('ting-ting') || 
+              n.includes('ting ting') ||
+              n.includes('mei-jia') ||
+              n.includes('mei jia')
+            );
           });
           if (twVoice) {
             utterance.voice = twVoice;

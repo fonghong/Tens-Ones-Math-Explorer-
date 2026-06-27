@@ -48,16 +48,36 @@ export default function App() {
   // Canvas Ref to trigger resets / manual groupings
   const canvasRef = useRef<MathCanvasRef | null>(null);
 
+  // Helper to warm up and unlock iOS/Android SpeechSynthesis inside direct user interaction contexts
+  const triggerSpeechWarmup = () => {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try {
+        const synthObj = window.speechSynthesis;
+        const utterance = new SpeechSynthesisUtterance(' ');
+        utterance.volume = 0.01;
+        utterance.rate = 2; // speak quickly
+        synthObj.speak(utterance);
+        
+        // Force the browser to populate voices if not already loaded
+        if (typeof synthObj.getVoices === 'function') {
+          synthObj.getVoices();
+        }
+      } catch (e) {
+        console.warn('SpeechSynthesis inline warmup failed:', e);
+      }
+    }
+  };
+
   // Pre-load speech synthesis voices and unlock audio on first user touch/gesture
   React.useEffect(() => {
     const unlockSpeech = () => {
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
         const synthObj = window.speechSynthesis;
         
-        // Create an empty silent utterance to unlock iOS/Android TTS engine
+        // Create an empty silent space utterance to unlock iOS/Android TTS engine (empty strings are ignored on iOS)
         try {
-          const utterance = new SpeechSynthesisUtterance('');
-          utterance.volume = 0;
+          const utterance = new SpeechSynthesisUtterance(' ');
+          utterance.volume = 0.01;
           utterance.rate = 1;
           synthObj.speak(utterance);
         } catch (e) {
@@ -106,6 +126,7 @@ export default function App() {
 
   // Handle Increments clamped to 99
   const handleIncrement = () => {
+    triggerSpeechWarmup();
     synth.setEnabled(soundEffects);
     synth.playTick();
     setValue((prev) => {
@@ -116,6 +137,7 @@ export default function App() {
 
   // Handle Decrements clamped to 0
   const handleDecrement = () => {
+    triggerSpeechWarmup();
     synth.setEnabled(soundEffects);
     synth.playTick();
     setValue((prev) => {
@@ -126,6 +148,7 @@ export default function App() {
 
   // Jump to specific mathematical presets
   const handleJumpToPreset = (presetVal: number) => {
+    triggerSpeechWarmup();
     synth.setEnabled(soundEffects);
     synth.playPop();
     setValue(presetVal);
@@ -133,6 +156,7 @@ export default function App() {
 
   // Full reset
   const handleReset = () => {
+    triggerSpeechWarmup();
     synth.setEnabled(soundEffects);
     synth.playCelebration();
     setValue(0);
